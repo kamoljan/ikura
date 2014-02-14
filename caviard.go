@@ -54,13 +54,10 @@ func put(w http.ResponseWriter, r *http.Request) {
 	h.Write(b)
 	f := fmt.Sprintf("%x", h.Sum(nil))
 
-	// write whole the body
-	err = ioutil.WriteFile("/var/caviar/store/"+f, b, 0644)
-	if err != nil {
-		panic(err)
-	}
+	path := fmt.Sprintf("/var/caviar/store/%s/%s/%s", f[:2], f[2:4], f)
+	fmt.Println(path)
 
-	fmt.Fprintf(w, "%s", b)
+	err = ioutil.WriteFile(path, b, 0644)
 	check(err)
 }
 
