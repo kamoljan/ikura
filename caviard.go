@@ -4,9 +4,7 @@ import (
 	"crypto/sha1"
 	"encoding/json"
 	"fmt"
-	// "io"
 	"io/ioutil"
-	// "log"
 	"net/http"
 	"os"
 )
@@ -57,7 +55,7 @@ func put(w http.ResponseWriter, r *http.Request) {
 	f := fmt.Sprintf("%x", h.Sum(nil))
 
 	// write whole the body
-	err = ioutil.WriteFile("/Users/kamol/work/go/gocode/src/github.com/kamoljan/sushi/"+f, b, 0644)
+	err = ioutil.WriteFile("/var/caviar/store/"+f, b, 0644)
 	if err != nil {
 		panic(err)
 	}
@@ -86,7 +84,7 @@ func initStore(path string) {
 
 func main() {
 	// initialize data store
-	initStore("/Users/kamol/work/go/gocode/src/github.com/kamoljan/sushi/store")
+	initStore("/var/caviar/store")
 
 	http.HandleFunc("/", errorHandler(put))
 	http.HandleFunc("/view", errorHandler(view))
