@@ -4,9 +4,14 @@ import (
 	"crypto/sha1"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"image"
+	"image/jpeg"
+	"log"
 	"net/http"
 	"os"
+	"time"
+
+	"github.com/nfnt/resize"
 )
 
 type Msg struct {
@@ -43,26 +48,50 @@ func Message(status string, message string) []byte {
 	return b
 }
 
-func calPath(eid string) string {
+func calPath(eid string, width, height int) string {
 	//TODO: remove hardcoded configuration to configuration file
-	return fmt.Sprintf("/var/caviar/store/%s/%s/%04x%s", eid[:2], eid[2:4], 1, eid)
+	return fmt.Sprintf("/var/caviar/store/%s/%s/%04x_%s_%x_%d_%d", eid[:2], eid[2:4], 1, eid, 0x9a, width, height)
 }
 
 func put(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "PUT" {
 		panic("Not supported Method")
 	}
+	defer r.Body.Close()
+	img, err := jpeg.Decode(r.Body) // decode jpeg into image.Image
+	if err != nil {
+		log.Fatal(err)
+	}
+	t0 := time.Now()
 
-	b, err := ioutil.ReadAll(r.Body)
+	baby_img := resize.Resize(400, 0, img, resize.NearestNeighbor)
+	writeToFile(baby_img)
+	infant_img := resize.Resize(200, 0, baby_img, resize.NearestNeighbor)
+	writeToFile(infant_img)
+	newborn_img := resize.Resize(100, 0, infant_img, resize.NearestNeighbor)
+	writeToFile(newborn_img)
 
+	t1 := time.Now()
+	fmt.Printf("The call took %v to run.\n", t1.Sub(t0))
+	//sperm_img := resize.Resize(1, 0, newborn_img, resize.NearestNeighbor)
+}
+
+// write image to file
+func writeToFile(m image.Image) {
 	h := sha1.New()
-	h.Write(b)
+	err := jpeg.Encode(h, m, nil)
+	check(err)
 	f := fmt.Sprintf("%x", h.Sum(nil))
-
-	path := calPath(f)
+	path := calPath(f, m.Bounds().Size().X, m.Bounds().Size().Y)
 	fmt.Println(path)
 
-	err = ioutil.WriteFile(path, b, 0644)
+	out, err := os.Create(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer out.Close()
+
+	err = jpeg.Encode(out, m, nil)
 	check(err)
 }
 
