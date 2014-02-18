@@ -43,6 +43,11 @@ func Message(status string, message string) []byte {
 	return b
 }
 
+func calPath(eid string) string {
+	//TODO: remove hardcoded configuration to configuration file
+	return fmt.Sprintf("/var/caviar/store/%s/%s/%04x%s", eid[:2], eid[2:4], 1, eid)
+}
+
 func put(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "PUT" {
 		panic("Not supported Method")
@@ -54,7 +59,7 @@ func put(w http.ResponseWriter, r *http.Request) {
 	h.Write(b)
 	f := fmt.Sprintf("%x", h.Sum(nil))
 
-	path := fmt.Sprintf("/var/caviar/store/%s/%s/%s", f[:2], f[2:4], f)
+	path := calPath(f)
 	fmt.Println(path)
 
 	err = ioutil.WriteFile(path, b, 0644)
