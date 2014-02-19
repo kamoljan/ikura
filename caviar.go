@@ -1,4 +1,4 @@
-package caviar
+package main
 
 import (
 	"crypto/sha1"

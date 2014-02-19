@@ -1,9 +1,8 @@
-package caviar
+package main
 
 import (
 	"fmt"
 	"image"
-	"log"
 	"net/http"
 	"testing"
 
