@@ -168,7 +168,7 @@ func initStore(path string) {
 }
 
 func main() {
-	initStore("/var/caviar/store")
+	initStore(caviarStore)
 
 	http.HandleFunc("/", errorHandler(put))
 	http.HandleFunc("/egg/", errorHandler(get))
