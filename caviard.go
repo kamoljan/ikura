@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"encoding/json"
 	"fmt"
+	"html"
 	"image"
 	"image/jpeg"
 	"log"
@@ -16,6 +17,20 @@ import (
 	_ "image/png"
 
 	"github.com/nfnt/resize"
+)
+
+//TODO: move it into conf file
+const (
+	caviarId    = 1
+	caviarStore = "/var/caviar/store/"
+
+	babyWidth    = 400
+	infantWidth  = 200
+	newbornWidth = 100
+	sperm        = 1
+
+	cacheMaxAge = 30 * 24 * 60 * 60 // 30 days
+	mime        = "image/jpeg"
 )
 
 type Msg struct {
@@ -46,15 +61,12 @@ func Message(status string, message string) []byte {
 		Message: message,
 	}
 	b, err := json.Marshal(m)
-	if err != nil {
-		panic(err) // real panic
-	}
+	check(err) // real panic
 	return b
 }
 
 func genPath(eid string, color string, width, height int) string {
-	//TODO: remove hardcoded configuration to configuration file
-	return fmt.Sprintf("/var/caviar/store/%s/%s/%04x_%s_%s_%d_%d", eid[:2], eid[2:4], 1, eid, color, width, height)
+	return fmt.Sprintf(caviarStore+"%s/%s/%04x_%s_%s_%d_%d", eid[:2], eid[2:4], caviarId, eid, color, width, height)
 }
 
 func put(w http.ResponseWriter, r *http.Request) {
@@ -69,23 +81,22 @@ func put(w http.ResponseWriter, r *http.Request) {
 	}
 	t0 := time.Now()
 
-	img_baby := resize.Resize(400, 0, img, resize.NearestNeighbor)
-	img_infant := resize.Resize(200, 0, img_baby, resize.NearestNeighbor)
-	img_newborn := resize.Resize(100, 0, img_infant, resize.NearestNeighbor)
-	img_sperm := resize.Resize(1, 0, img_newborn, resize.NearestNeighbor)
+	imgBaby := resize.Resize(babyWidth, 0, img, resize.NearestNeighbor)
+	imgInfant := resize.Resize(infantWidth, 0, imgBaby, resize.NearestNeighbor)
+	imgNewborn := resize.Resize(newbornWidth, 0, imgInfant, resize.NearestNeighbor)
+	imgSperm := resize.Resize(sperm, sperm, imgNewborn, resize.NearestNeighbor)
 
-	red, green, blue, _ := img_sperm.At(0, 0).RGBA()
+	red, green, blue, _ := imgSperm.At(0, 0).RGBA()
 	color := fmt.Sprintf("%X%X%X", red>>8, green>>8, blue>>8) // removing 1 byte 9A16->9A
 
-	imgToFile(img_baby, color)
-	imgToFile(img_infant, color)
-	imgToFile(img_newborn, color)
+	imgToFile(imgBaby, color)
+	imgToFile(imgInfant, color)
+	imgToFile(imgNewborn, color)
 
 	t1 := time.Now()
 	fmt.Printf("The call took %v to run.\n", t1.Sub(t0))
 }
 
-// write image to file
 func imgToFile(img image.Image, color string) {
 	h := sha1.New()
 	err := jpeg.Encode(h, img, nil)
@@ -105,9 +116,28 @@ func imgToFile(img image.Image, color string) {
 	check(err)
 }
 
-func view(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "image")
-	http.ServeFile(w, r, "image-"+r.FormValue("id"))
+func parsePath(eid string) string {
+	return fmt.Sprintf(caviarStore+"%s/%s/%s", eid[5:7], eid[7:9], eid)
+}
+
+func get(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", mime)
+	w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d", cacheMaxAge))
+	// TODO: need to add Expires into Header
+	// self.set_common_header()
+	// self.set_header("Content-Type", self.application.options["mime"])
+	// self.set_header("Cache-Control", "max-age="+str(CACHE_MAX_AGE))
+	// self.set_header("Expires", datetime.datetime.utcfromtimestamp(info.st_mtime+CACHE_MAX_AGE))
+	// self.set_header("Last-Modified", datetime.datetime.utcfromtimestamp(info.st_mtime))
+	// self.set_header("Date", datetime.datetime.utcfromtimestamp(time.time()))
+
+	eid := html.EscapeString(r.URL.Path[5:])
+	fmt.Println(eid)
+
+	path := parsePath(eid)
+	fmt.Println(path)
+
+	http.ServeFile(w, r, path)
 }
 
 func initStore(path string) {
@@ -124,13 +154,12 @@ func initStore(path string) {
 }
 
 func main() {
-	// initialize data store
 	initStore("/var/caviar/store")
 
 	http.HandleFunc("/", errorHandler(put))
-	http.HandleFunc("/view", errorHandler(view))
+	http.HandleFunc("/egg/", errorHandler(get))
 	http.ListenAndServe(":8080", nil)
 
-	// TEST
+	// FIXME: fix (/ad/saved)
 	// curl -XPUT http://localhost:8080/ad/saved -H "Content-type: image/jpeg" --data-binary @gopher.png
 }
