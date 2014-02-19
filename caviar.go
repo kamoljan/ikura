@@ -1,4 +1,4 @@
-package main
+package caviar
 
 import (
 	"crypto/sha1"
@@ -66,7 +66,11 @@ func Message(status string, message string) []byte {
 }
 
 func genPath(eid string, color string, width, height int) string {
-	return fmt.Sprintf(caviarStore+"%s/%s/%04x_%s_%s_%d_%d", eid[:2], eid[2:4], caviarId, eid, color, width, height)
+	return fmt.Sprintf(caviarStore+"%s/%s/%s", eid[:2], eid[2:4], genFile(eid, color, width, height))
+}
+
+func genFile(eid string, color string, width, height int) string {
+	return fmt.Sprintf("%04x_%s_%s_%d_%d", caviarId, eid, color, width, height)
 }
 
 func put(w http.ResponseWriter, r *http.Request) {
@@ -97,21 +101,31 @@ func put(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("The call took %v to run.\n", t1.Sub(t0))
 }
 
-func imgToFile(img image.Image, color string) {
+func genHash(img image.Image) string {
 	h := sha1.New()
 	err := jpeg.Encode(h, img, nil)
 	check(err)
-	f := fmt.Sprintf("%x", h.Sum(nil)) // generate hash
+	return fmt.Sprintf("%x", h.Sum(nil)) // generate hash
+}
 
-	path := genPath(f, color, img.Bounds().Size().X, img.Bounds().Size().Y) // generate path
+func imgToFile(img image.Image, color string) {
+	path := genPath(genHash(img), color, img.Bounds().Size().X, img.Bounds().Size().Y) // generate path
 	fmt.Println(path)
-
 	out, err := os.Create(path)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer out.Close()
+	err = jpeg.Encode(out, img, nil) // write image to file
+	check(err)
+}
 
+func imgToTestFile(img image.Image) {
+	path := genFile(genHash(img), "TEST", img.Bounds().Size().X, img.Bounds().Size().Y) + ".jpg"
+	fmt.Println(path)
+	out, err := os.Create(path)
+	check(err)
+	defer out.Close()
 	err = jpeg.Encode(out, img, nil) // write image to file
 	check(err)
 }
