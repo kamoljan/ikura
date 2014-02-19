@@ -11,6 +11,10 @@ import (
 	"os"
 	"time"
 
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+
 	"github.com/nfnt/resize"
 )
 
@@ -48,9 +52,9 @@ func Message(status string, message string) []byte {
 	return b
 }
 
-func calPath(eid string, width, height int) string {
+func genPath(eid string, color string, width, height int) string {
 	//TODO: remove hardcoded configuration to configuration file
-	return fmt.Sprintf("/var/caviar/store/%s/%s/%04x_%s_%x_%d_%d", eid[:2], eid[2:4], 1, eid, 0x9a, width, height)
+	return fmt.Sprintf("/var/caviar/store/%s/%s/%04x_%s_%s_%d_%d", eid[:2], eid[2:4], 1, eid, color, width, height)
 }
 
 func put(w http.ResponseWriter, r *http.Request) {
@@ -58,31 +62,37 @@ func put(w http.ResponseWriter, r *http.Request) {
 		panic("Not supported Method")
 	}
 	defer r.Body.Close()
-	img, err := jpeg.Decode(r.Body) // decode jpeg into image.Image
+	img, img_format, err := image.Decode(r.Body) // decode jpeg into image.Image
+	fmt.Println(img_format)
 	if err != nil {
 		log.Fatal(err)
 	}
 	t0 := time.Now()
 
-	baby_img := resize.Resize(400, 0, img, resize.NearestNeighbor)
-	writeToFile(baby_img)
-	infant_img := resize.Resize(200, 0, baby_img, resize.NearestNeighbor)
-	writeToFile(infant_img)
-	newborn_img := resize.Resize(100, 0, infant_img, resize.NearestNeighbor)
-	writeToFile(newborn_img)
+	img_baby := resize.Resize(400, 0, img, resize.NearestNeighbor)
+	img_infant := resize.Resize(200, 0, img_baby, resize.NearestNeighbor)
+	img_newborn := resize.Resize(100, 0, img_infant, resize.NearestNeighbor)
+	img_sperm := resize.Resize(1, 0, img_newborn, resize.NearestNeighbor)
+
+	red, green, blue, _ := img_sperm.At(0, 0).RGBA()
+	color := fmt.Sprintf("%X%X%X", red>>8, green>>8, blue>>8) // removing 1 byte 9A16->9A
+
+	imgToFile(img_baby, color)
+	imgToFile(img_infant, color)
+	imgToFile(img_newborn, color)
 
 	t1 := time.Now()
 	fmt.Printf("The call took %v to run.\n", t1.Sub(t0))
-	//sperm_img := resize.Resize(1, 0, newborn_img, resize.NearestNeighbor)
 }
 
 // write image to file
-func writeToFile(m image.Image) {
+func imgToFile(img image.Image, color string) {
 	h := sha1.New()
-	err := jpeg.Encode(h, m, nil)
+	err := jpeg.Encode(h, img, nil)
 	check(err)
-	f := fmt.Sprintf("%x", h.Sum(nil))
-	path := calPath(f, m.Bounds().Size().X, m.Bounds().Size().Y)
+	f := fmt.Sprintf("%x", h.Sum(nil)) // generate hash
+
+	path := genPath(f, color, img.Bounds().Size().X, img.Bounds().Size().Y) // generate path
 	fmt.Println(path)
 
 	out, err := os.Create(path)
@@ -91,7 +101,7 @@ func writeToFile(m image.Image) {
 	}
 	defer out.Close()
 
-	err = jpeg.Encode(out, m, nil)
+	err = jpeg.Encode(out, img, nil) // write image to file
 	check(err)
 }
 
