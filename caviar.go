@@ -77,10 +77,6 @@ func Message(status string, message string) []byte {
 	return b
 }
 
-// func genPath(eid string, color string, width, height int) string {
-// 	return fmt.Sprintf(caviarStore+"%s/%s/%s", eid[:2], eid[2:4], genFile(eid, color, width, height))
-// }
-
 func genPath(file string) string {
 	return fmt.Sprintf(caviarStore+"%s/%s/%s", file[5:7], file[7:9], file)
 }
@@ -95,10 +91,11 @@ func put(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 	img, img_format, err := image.Decode(r.Body)
-	fmt.Println(img_format)
 	if err != nil {
-		log.Fatal(err)
+		log.Panic(err)
+		// log.Fatal(err)
 	}
+	fmt.Println(img_format)
 	t0 := time.Now()
 
 	imgBaby := resize.Resize(babyWidth, 0, img, resize.NearestNeighbor)
@@ -201,9 +198,7 @@ func initStore(path string) {
 	for i := 0; i < 256; i++ {
 		for x := 0; x < 256; x++ {
 			err := os.MkdirAll(fmt.Sprintf("%s/%02x/%02x", path, i, x), 0755)
-			if err != nil {
-				panic(err)
-			}
+			check(err)
 		}
 	}
 	fmt.Println("...Done") // total 65536 directories
