@@ -33,8 +33,20 @@ const (
 	mime        = "image/jpeg"
 )
 
+type Eggs struct {
+	Baby    string
+	Infant  string
+	Newborn string
+}
+
 type Msg struct {
-	Status, Message string
+	Status  string
+	Message string
+}
+
+type MsgOk struct {
+	Status  string
+	Message Eggs
 }
 
 func check(err error) {
@@ -65,8 +77,12 @@ func Message(status string, message string) []byte {
 	return b
 }
 
-func genPath(eid string, color string, width, height int) string {
-	return fmt.Sprintf(caviarStore+"%s/%s/%s", eid[:2], eid[2:4], genFile(eid, color, width, height))
+// func genPath(eid string, color string, width, height int) string {
+// 	return fmt.Sprintf(caviarStore+"%s/%s/%s", eid[:2], eid[2:4], genFile(eid, color, width, height))
+// }
+
+func genPath(file string) string {
+	return fmt.Sprintf(caviarStore+"%s/%s/%s", file[5:7], file[7:9], file)
 }
 
 func genFile(eid string, color string, width, height int) string {
@@ -78,7 +94,7 @@ func put(w http.ResponseWriter, r *http.Request) {
 		panic("Not supported Method")
 	}
 	defer r.Body.Close()
-	img, img_format, err := image.Decode(r.Body) // decode jpeg into image.Image
+	img, img_format, err := image.Decode(r.Body)
 	fmt.Println(img_format)
 	if err != nil {
 		log.Fatal(err)
@@ -93,12 +109,35 @@ func put(w http.ResponseWriter, r *http.Request) {
 	red, green, blue, _ := imgSperm.At(0, 0).RGBA()
 	color := fmt.Sprintf("%X%X%X", red>>8, green>>8, blue>>8) // removing 1 byte 9A16->9A
 
-	imgToFile(imgBaby, color)
-	imgToFile(imgInfant, color)
-	imgToFile(imgNewborn, color)
+	fileBaby := imgToFile(imgBaby, color)
+	fileInfant := imgToFile(imgInfant, color)
+	fileNewborn := imgToFile(imgNewborn, color)
+
+	var m interface{}
+	result := Eggs{
+		Baby:    fileBaby,
+		Infant:  fileInfant,
+		Newborn: fileNewborn,
+	}
+	if err != nil {
+		m = Msg{
+			Status:  "ERROR",
+			Message: "Was not able to save your file",
+		}
+	} else {
+		m = MsgOk{
+			Status:  "OK",
+			Message: result,
+		}
+	}
 
 	t1 := time.Now()
 	fmt.Printf("The call took %v to run.\n", t1.Sub(t0))
+
+	b, err := json.Marshal(m)
+	check(err)
+	w.Write(b)
+
 }
 
 func genHash(img image.Image) string {
@@ -108,8 +147,10 @@ func genHash(img image.Image) string {
 	return fmt.Sprintf("%x", h.Sum(nil)) // generate hash
 }
 
-func imgToFile(img image.Image, color string) {
-	path := genPath(genHash(img), color, img.Bounds().Size().X, img.Bounds().Size().Y) // generate path
+func imgToFile(img image.Image, color string) string {
+	file := genFile(genHash(img), color, img.Bounds().Size().X, img.Bounds().Size().Y)
+	// path := genPath(genHash(img), color, img.Bounds().Size().X, img.Bounds().Size().Y) // generate path
+	path := genPath(file)
 	fmt.Println(path)
 	out, err := os.Create(path)
 	if err != nil {
@@ -118,6 +159,7 @@ func imgToFile(img image.Image, color string) {
 	defer out.Close()
 	err = jpeg.Encode(out, img, nil) // write image to file
 	check(err)
+	return file
 }
 
 func imgToTestFile(img image.Image) {
