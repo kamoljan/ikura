@@ -41,12 +41,7 @@ type Eggs struct {
 
 type Msg struct {
 	Status  string
-	Message string
-}
-
-type MsgOk struct {
-	Status  string
-	Message Eggs
+	Message interface{}
 }
 
 func check(err error) {
@@ -67,7 +62,7 @@ func errorHandler(fn http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func Message(status string, message string) []byte {
+func Message(status string, message interface{}) []byte {
 	m := Msg{
 		Status:  status,
 		Message: message,
@@ -78,11 +73,15 @@ func Message(status string, message string) []byte {
 }
 
 func genPath(file string) string {
-	return fmt.Sprintf(caviarStore+"%s/%s/%s", file[5:7], file[7:9], file)
+	path := fmt.Sprintf(caviarStore+"%s/%s/%s", file[5:7], file[7:9], file)
+	fmt.Println(path)
+	return path
 }
 
 func genFile(eid string, color string, width, height int) string {
-	return fmt.Sprintf("%04x_%s_%s_%d_%d", caviarId, eid, color, width, height)
+	file := fmt.Sprintf("%04x_%s_%s_%d_%d", caviarId, eid, color, width, height)
+	fmt.Println(file)
+	return file
 }
 
 func put(w http.ResponseWriter, r *http.Request) {
@@ -90,12 +89,10 @@ func put(w http.ResponseWriter, r *http.Request) {
 		panic("Not supported Method")
 	}
 	defer r.Body.Close()
-	img, img_format, err := image.Decode(r.Body)
+	img, _, err := image.Decode(r.Body)
 	if err != nil {
-		log.Panic(err)
-		// log.Fatal(err)
+		log.Panic(err) // log.Fatal(err)
 	}
-	fmt.Println(img_format)
 	t0 := time.Now()
 
 	imgBaby := resize.Resize(babyWidth, 0, img, resize.NearestNeighbor)
@@ -110,31 +107,20 @@ func put(w http.ResponseWriter, r *http.Request) {
 	fileInfant := imgToFile(imgInfant, color)
 	fileNewborn := imgToFile(imgNewborn, color)
 
-	var m interface{}
 	result := Eggs{
 		Baby:    fileBaby,
 		Infant:  fileInfant,
 		Newborn: fileNewborn,
 	}
+
 	if err != nil {
-		m = Msg{
-			Status:  "ERROR",
-			Message: "Was not able to save your file",
-		}
+		w.Write(Message("ERROR", "Was not able to save your file"))
 	} else {
-		m = MsgOk{
-			Status:  "OK",
-			Message: result,
-		}
+		w.Write(Message("OK", result))
 	}
 
 	t1 := time.Now()
 	fmt.Printf("The call took %v to run.\n", t1.Sub(t0))
-
-	b, err := json.Marshal(m)
-	check(err)
-	w.Write(b)
-
 }
 
 func genHash(img image.Image) string {
@@ -146,13 +132,9 @@ func genHash(img image.Image) string {
 
 func imgToFile(img image.Image, color string) string {
 	file := genFile(genHash(img), color, img.Bounds().Size().X, img.Bounds().Size().Y)
-	// path := genPath(genHash(img), color, img.Bounds().Size().X, img.Bounds().Size().Y) // generate path
 	path := genPath(file)
-	fmt.Println(path)
 	out, err := os.Create(path)
-	if err != nil {
-		log.Fatal(err)
-	}
+	check(err)
 	defer out.Close()
 	err = jpeg.Encode(out, img, nil) // write image to file
 	check(err)
@@ -161,7 +143,6 @@ func imgToFile(img image.Image, color string) string {
 
 func imgToTestFile(img image.Image) {
 	path := genFile(genHash(img), "TEST", img.Bounds().Size().X, img.Bounds().Size().Y) + ".jpg"
-	fmt.Println(path)
 	out, err := os.Create(path)
 	check(err)
 	defer out.Close()
@@ -183,13 +164,8 @@ func get(w http.ResponseWriter, r *http.Request) {
 	// self.set_header("Expires", datetime.datetime.utcfromtimestamp(info.st_mtime+CACHE_MAX_AGE))
 	// self.set_header("Last-Modified", datetime.datetime.utcfromtimestamp(info.st_mtime))
 	// self.set_header("Date", datetime.datetime.utcfromtimestamp(time.time()))
-
 	eid := html.EscapeString(r.URL.Path[5:])
-	fmt.Println(eid)
-
 	path := parsePath(eid)
-	fmt.Println(path)
-
 	http.ServeFile(w, r, path)
 }
 
@@ -206,7 +182,6 @@ func initStore(path string) {
 
 func main() {
 	initStore(caviarStore)
-
 	http.HandleFunc("/", errorHandler(put))
 	http.HandleFunc("/egg/", errorHandler(get))
 	http.ListenAndServe(":8080", nil)
