@@ -36,15 +36,12 @@ const (
 )
 
 type Eggs struct {
-	Origin  string
-	Baby    string
-	Infant  string
-	Newborn string
+	Origin, Baby, Infant, Newborn string
 }
 
 type Msg struct {
-	Status  string
-	Message interface{}
+	Status string
+	Result interface{}
 }
 
 func check(err error) {
@@ -67,8 +64,8 @@ func errorHandler(fn http.HandlerFunc) http.HandlerFunc {
 
 func Message(status string, message interface{}) []byte {
 	m := Msg{
-		Status:  status,
-		Message: message,
+		Status: status,
+		Result: message,
 	}
 	b, err := json.Marshal(m)
 	check(err) // real panic
@@ -146,54 +143,54 @@ func put(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.Write(Message("ERROR", "Was not able to save your file"))
 	} else {
-		w.Write(Message("OK", result))
+		w.Write(Message("OK", &result))
 	}
 
 	t1 := time.Now()
 	fmt.Printf("The call took %v to run.\n", t1.Sub(t0))
 }
 
-func putOld(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "PUT" {
-		panic("Not supported Method")
-	}
+// func putOld(w http.ResponseWriter, r *http.Request) {
+// 	if r.Method != "PUT" {
+// 		panic("Not supported Method")
+// 	}
 
-	fmt.Println(r)
+// 	fmt.Println(r)
 
-	defer r.Body.Close()
-	img, _, err := image.Decode(r.Body)
-	if err != nil {
-		log.Panic(err) // log.Fatal(err)
-	}
-	t0 := time.Now()
+// 	defer r.Body.Close()
+// 	img, _, err := image.Decode(r.Body)
+// 	if err != nil {
+// 		log.Panic(err) // log.Fatal(err)
+// 	}
+// 	t0 := time.Now()
 
-	imgBaby := resize.Resize(babyWidth, 0, img, resize.NearestNeighbor)
-	imgInfant := resize.Resize(infantWidth, 0, imgBaby, resize.NearestNeighbor)
-	imgNewborn := resize.Resize(newbornWidth, 0, imgInfant, resize.NearestNeighbor)
-	imgSperm := resize.Resize(sperm, sperm, imgNewborn, resize.NearestNeighbor)
+// 	imgBaby := resize.Resize(babyWidth, 0, img, resize.NearestNeighbor)
+// 	imgInfant := resize.Resize(infantWidth, 0, imgBaby, resize.NearestNeighbor)
+// 	imgNewborn := resize.Resize(newbornWidth, 0, imgInfant, resize.NearestNeighbor)
+// 	imgSperm := resize.Resize(sperm, sperm, imgNewborn, resize.NearestNeighbor)
 
-	red, green, blue, _ := imgSperm.At(0, 0).RGBA()
-	color := fmt.Sprintf("%X%X%X", red>>8, green>>8, blue>>8) // removing 1 byte 9A16->9A
+// 	red, green, blue, _ := imgSperm.At(0, 0).RGBA()
+// 	color := fmt.Sprintf("%X%X%X", red>>8, green>>8, blue>>8) // removing 1 byte 9A16->9A
 
-	fileBaby := imgToFile(imgBaby, color)
-	fileInfant := imgToFile(imgInfant, color)
-	fileNewborn := imgToFile(imgNewborn, color)
+// 	fileBaby := imgToFile(imgBaby, color)
+// 	fileInfant := imgToFile(imgInfant, color)
+// 	fileNewborn := imgToFile(imgNewborn, color)
 
-	result := Eggs{
-		Baby:    fileBaby,
-		Infant:  fileInfant,
-		Newborn: fileNewborn,
-	}
+// 	result := Eggs{
+// 		baby:    fileBaby,
+// 		infant:  fileInfant,
+// 		newborn: fileNewborn,
+// 	}
 
-	if err != nil {
-		w.Write(Message("ERROR", "Was not able to save your file"))
-	} else {
-		w.Write(Message("OK", result))
-	}
+// 	if err != nil {
+// 		w.Write(Message("ERROR", "Was not able to save your file"))
+// 	} else {
+// 		w.Write(Message("OK", result))
+// 	}
 
-	t1 := time.Now()
-	fmt.Printf("The call took %v to run.\n", t1.Sub(t0))
-}
+// 	t1 := time.Now()
+// 	fmt.Printf("The call took %v to run.\n", t1.Sub(t0))
+// }
 
 func genHash(img image.Image) string {
 	h := sha1.New()
