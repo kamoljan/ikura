@@ -18,13 +18,16 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 
+	"labix.org/v2/mgo"
+	// "labix.org/v2/mgo/bson"
+
 	"github.com/nfnt/resize"
 )
 
 //TODO: move it into conf file
 const (
 	caviarId    = 1
-	caviarStore = "/var/caviar/store/"
+	caviarStore = "/var/ikura/store/"
 
 	babyWidth    = 400
 	infantWidth  = 200
@@ -33,21 +36,44 @@ const (
 
 	cacheMaxAge = 30 * 24 * 60 * 60 // 30 days
 	mime        = "image/jpeg"
+
+	mongodb = "mongodb://admin:12345678@localhost:27017/sa"
 )
 
-type Eggs struct {
-	Origin, Baby, Infant, Newborn string
+type Egg struct {
+	Egg     string `json:"egg"`     //0001_bbf06d39e4dac6b4cac5ee16226f6b5f7c50f071_ACA0AC_401_638
+	Baby    string `json:"baby"`    //0001_6881db255b21c864c9d1e28db50dc3b71dab5b78_ACA0AC_400_637
+	Infant  string `json:"infant"`  //0001_ff41e42b0134e219bc09eddda87687822460afcf_ACA0AC_200_319
+	Newborn string `json:"newborn"` //0001_040db0bc2fc49ab41fd81294c7d195c7d1de358b_ACA0AC_100_160
+}
+
+type Result struct {
+	Egg string `json:"egg"` //0001_bbf06d39e4dac6b4cac5ee16226f6b5f7c50f071_ACA0AC_401_638
 }
 
 type Msg struct {
-	Status string
-	Result interface{}
+	Status string      `json:"status"` //"ok"
+	Result interface{} `json:"result"` //{egg: "0001_bbf06d39e4dac6b4cac5ee16226f6b5f7c50f071_ACA0AC_401_638"}
 }
 
 func check(err error) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func (egg *Egg) saveMeta() error {
+	session, err := mgo.Dial(mongodb)
+	check(err)
+	defer session.Close()
+
+	// Optional. Switch the session to a monotonic behavior.
+	session.SetMode(mgo.Monotonic, true)
+
+	c := session.DB("sa").C("egg")
+	err = c.Insert(&egg)
+	check(err)
+	return err
 }
 
 func errorHandler(fn http.HandlerFunc) http.HandlerFunc {
@@ -84,6 +110,14 @@ func genFile(eid string, color string, width, height int) string {
 	return file
 }
 
+/*
+{
+	status: "ok"
+	result: {
+	    egg: "0001_bbf06d39e4dac6b4cac5ee16226f6b5f7c50f071_ACA0AC_401_638"
+	}
+}
+*/
 func put(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "PUT" {
 		panic("Not supported Method")
@@ -133,64 +167,27 @@ func put(w http.ResponseWriter, r *http.Request) {
 	fileInfant := imgToFile(imgInfant, color)
 	fileNewborn := imgToFile(imgNewborn, color)
 
-	result := Eggs{
-		Origin:  fileOrig,
+	result := Result{
+		Egg: fileOrig,
+	}
+
+	egg := Egg{
+		Egg:     fileOrig,
 		Baby:    fileBaby,
 		Infant:  fileInfant,
 		Newborn: fileNewborn,
 	}
+	err = egg.saveMeta()
 
 	if err != nil {
 		w.Write(Message("ERROR", "Was not able to save your file"))
 	} else {
-		w.Write(Message("OK", &result))
+		w.Write(Message("ok", &result))
 	}
 
 	t1 := time.Now()
 	fmt.Printf("The call took %v to run.\n", t1.Sub(t0))
 }
-
-// func putOld(w http.ResponseWriter, r *http.Request) {
-// 	if r.Method != "PUT" {
-// 		panic("Not supported Method")
-// 	}
-
-// 	fmt.Println(r)
-
-// 	defer r.Body.Close()
-// 	img, _, err := image.Decode(r.Body)
-// 	if err != nil {
-// 		log.Panic(err) // log.Fatal(err)
-// 	}
-// 	t0 := time.Now()
-
-// 	imgBaby := resize.Resize(babyWidth, 0, img, resize.NearestNeighbor)
-// 	imgInfant := resize.Resize(infantWidth, 0, imgBaby, resize.NearestNeighbor)
-// 	imgNewborn := resize.Resize(newbornWidth, 0, imgInfant, resize.NearestNeighbor)
-// 	imgSperm := resize.Resize(sperm, sperm, imgNewborn, resize.NearestNeighbor)
-
-// 	red, green, blue, _ := imgSperm.At(0, 0).RGBA()
-// 	color := fmt.Sprintf("%X%X%X", red>>8, green>>8, blue>>8) // removing 1 byte 9A16->9A
-
-// 	fileBaby := imgToFile(imgBaby, color)
-// 	fileInfant := imgToFile(imgInfant, color)
-// 	fileNewborn := imgToFile(imgNewborn, color)
-
-// 	result := Eggs{
-// 		baby:    fileBaby,
-// 		infant:  fileInfant,
-// 		newborn: fileNewborn,
-// 	}
-
-// 	if err != nil {
-// 		w.Write(Message("ERROR", "Was not able to save your file"))
-// 	} else {
-// 		w.Write(Message("OK", result))
-// 	}
-
-// 	t1 := time.Now()
-// 	fmt.Printf("The call took %v to run.\n", t1.Sub(t0))
-// }
 
 func genHash(img image.Image) string {
 	h := sha1.New()
@@ -210,15 +207,6 @@ func imgToFile(img image.Image, color string) string {
 	return file
 }
 
-func imgToTestFile(img image.Image) {
-	path := genFile(genHash(img), "TEST", img.Bounds().Size().X, img.Bounds().Size().Y) + ".jpg"
-	out, err := os.Create(path)
-	check(err)
-	defer out.Close()
-	err = jpeg.Encode(out, img, nil) // write image to file
-	check(err)
-}
-
 func parsePath(eid string) string {
 	return fmt.Sprintf(caviarStore+"%s/%s/%s", eid[5:7], eid[7:9], eid)
 }
@@ -226,13 +214,6 @@ func parsePath(eid string) string {
 func get(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", mime)
 	w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d", cacheMaxAge))
-	// TODO: need to add Expires into Header
-	// self.set_common_header()
-	// self.set_header("Content-Type", self.application.options["mime"])
-	// self.set_header("Cache-Control", "max-age="+str(CACHE_MAX_AGE))
-	// self.set_header("Expires", datetime.datetime.utcfromtimestamp(info.st_mtime+CACHE_MAX_AGE))
-	// self.set_header("Last-Modified", datetime.datetime.utcfromtimestamp(info.st_mtime))
-	// self.set_header("Date", datetime.datetime.utcfromtimestamp(time.time()))
 	eid := html.EscapeString(r.URL.Path[5:])
 	path := parsePath(eid)
 	http.ServeFile(w, r, path)

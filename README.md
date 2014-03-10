@@ -1,4 +1,4 @@
-# Caviar consists of eggs for Sushi
+# Ikura consists of eggs for Sushi
 
 ## API
 
