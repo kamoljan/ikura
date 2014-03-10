@@ -19,6 +19,7 @@ import (
 	_ "image/png"
 
 	"labix.org/v2/mgo"
+	"labix.org/v2/mgo/bson"
 
 	"github.com/nfnt/resize"
 )
@@ -57,7 +58,7 @@ type Msg struct {
 func (egg *Egg) saveMeta() error {
 	session, err := mgo.Dial(mongodb)
 	if err != nil {
-		log.Fatal("Was not able to connect to DB ", err)
+		log.Fatal("Unable to connect to DB ", err)
 	}
 
 	defer session.Close()
@@ -66,9 +67,11 @@ func (egg *Egg) saveMeta() error {
 	session.SetMode(mgo.Monotonic, true)
 
 	c := session.DB("sa").C("egg")
+	// i := bson.NewObjectId() // in case we want to know _id
+	// c.Insert(bson.M{"_id": i, &egg})
 	err = c.Insert(&egg)
 	if err != nil {
-		log.Fatal("Was not able to save to DB ", err)
+		log.Fatal("Unable to save to DB ", err)
 	}
 	return err
 }
@@ -80,7 +83,7 @@ func Message(status string, message interface{}) []byte {
 	}
 	b, err := json.Marshal(m)
 	if err != nil {
-		log.Println("Was not able to json.Marshal ", err)
+		log.Println("Unable to json.Marshal ", err)
 	}
 	return b
 }
@@ -188,18 +191,21 @@ func genHash(img image.Image) (string, error) {
 func imgToFile(img image.Image, color string) (string, error) {
 	hash, err := genHash(img)
 	if err != nil {
-		log.Println("Unable to a file ", err)
+		log.Println("Unable to save a file ", err)
+		return "", err
 	}
 	file := genFile(hash, color, img.Bounds().Size().X, img.Bounds().Size().Y)
 	path := genPath(file)
 	out, err := os.Create(path)
 	if err != nil {
 		log.Println("Unable to create a file", err)
+		return "", err
 	}
 	defer out.Close()
 	err = jpeg.Encode(out, img, nil) // write image to file
 	if err != nil {
 		log.Println("Unable to save your image to file")
+		return "", err
 	}
 	return file, err
 }
@@ -208,11 +214,51 @@ func parsePath(eid string) string {
 	return fmt.Sprintf(ikuraStore+"%s/%s/%s", eid[5:7], eid[7:9], eid)
 }
 
+func getEggBySize(id string) (Egg, error) {
+	session, err := mgo.Dial("mongodb://admin:12345678@localhost:27017/sa")
+	if err != nil {
+		log.Fatal("Unable to connect to DB ", err)
+	}
+
+	defer session.Close()
+
+	// Optional. Switch the session to a monotonic behavior.
+	session.SetMode(mgo.Monotonic, true)
+
+	result := Egg{}
+	c := session.DB("sa").C("egg")
+	// err = c.FindId(bson.ObjectIdHex(id)).One(&result)
+	err = c.Find(bson.M{"egg": id}).One(&result)
+	return result, err
+}
+
+//http://localhost:9090/egg/0001_8787bec619ff019fd17fe02599a384d580bf6779_9BA4AA_400_300?type=baby
 func get(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", mime)
 	w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d", cacheMaxAge))
-	eid := html.EscapeString(r.URL.Path[5:])
+	// log.Println("GET: r.URL.Path = " + r.URL.Path)
+	// log.Println("GET: r.FromValue(size) = " + r.FormValue("size"))
+	size := r.FormValue("size")
+	eid := html.EscapeString(r.URL.Path[5:]) //cutting "/egg/"
+	if size != "" {
+		d, err := getEggBySize(eid)
+		if err != nil {
+			w.Write(Message("ERROR", "Unable to find by egg"))
+			return
+		}
+		if size == "baby" {
+			eid = d.Baby
+		} else if size == "infant" {
+			eid = d.Infant
+		} else if size == "newborn" {
+			eid = d.Newborn
+		} else {
+			eid = d.Egg
+		}
+	}
+	log.Println("GET: eid = " + eid)
 	path := parsePath(eid)
+	log.Println("GET: path = " + path)
 	http.ServeFile(w, r, path)
 }
 
