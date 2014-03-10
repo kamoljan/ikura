@@ -19,7 +19,6 @@ import (
 	_ "image/png"
 
 	"labix.org/v2/mgo"
-	// "labix.org/v2/mgo/bson"
 
 	"github.com/nfnt/resize"
 )
@@ -59,6 +58,7 @@ type Msg struct {
 func check(err error) {
 	if err != nil {
 		panic(err)
+		log.Println("PANIC ERROR")
 	}
 }
 
@@ -76,18 +76,6 @@ func (egg *Egg) saveMeta() error {
 	return err
 }
 
-func errorHandler(fn http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			if err := recover(); err != nil {
-				w.WriteHeader(500)
-				w.Write(Message("ERROR", err.(string)))
-			}
-		}()
-		fn(w, r)
-	}
-}
-
 func Message(status string, message interface{}) []byte {
 	m := Msg{
 		Status: status,
@@ -100,13 +88,13 @@ func Message(status string, message interface{}) []byte {
 
 func genPath(file string) string {
 	path := fmt.Sprintf(ikuraStore+"%s/%s/%s", file[5:7], file[7:9], file)
-	fmt.Println(path)
+	log.Println(path)
 	return path
 }
 
 func genFile(eid string, color string, width, height int) string {
 	file := fmt.Sprintf("%04x_%s_%s_%d_%d", ikuraId, eid, color, width, height)
-	fmt.Println(file)
+	log.Println(file)
 	return file
 }
 
@@ -123,7 +111,7 @@ func put(w http.ResponseWriter, r *http.Request) {
 		panic("Not supported Method")
 	}
 
-	fmt.Println(r)
+	log.Println(r)
 
 	reader, err := r.MultipartReader()
 	if err != nil {
@@ -186,7 +174,7 @@ func put(w http.ResponseWriter, r *http.Request) {
 	}
 
 	t1 := time.Now()
-	fmt.Printf("The call took %v to run.\n", t1.Sub(t0))
+	log.Printf("The call took %v to run.\n", t1.Sub(t0))
 }
 
 func genHash(img image.Image) string {
@@ -220,22 +208,41 @@ func get(w http.ResponseWriter, r *http.Request) {
 }
 
 func initStore(path string) {
-	fmt.Println("Initializing data store...")
+	log.Println("Initializing data store...")
 	for i := 0; i < 256; i++ {
 		for x := 0; x < 256; x++ {
 			err := os.MkdirAll(fmt.Sprintf("%s/%02x/%02x", path, i, x), 0755)
 			check(err)
 		}
 	}
-	fmt.Println("...Done") // total 65536 directories
+	log.Println("...Done") // total 65536 directories
+}
+
+// func errorHandler(fn http.HandlerFunc) http.HandlerFunc {
+// 	return func(w http.ResponseWriter, r *http.Request) {
+// 		defer func() {
+// 			if err := recover(); err != nil {
+// 				w.WriteHeader(500)
+// 				w.Write(Message("ERROR", err.(string)))
+// 			}
+// 		}()
+// 		fn(w, r)
+// 	}
+// }
+
+func logHandler(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		log.Println(req.URL)
+		h.ServeHTTP(rw, req)
+	})
 }
 
 func main() {
 	initStore(ikuraStore)
-	http.HandleFunc("/", errorHandler(put))
-	http.HandleFunc("/egg/", errorHandler(get))
-	http.ListenAndServe(":9090", nil)
-
-	// FIXME: fix (/ad/saved)
-	// curl -XPUT http://localhost:8080/ad/saved -H "Content-type: image/jpeg" --data-binary @gopher.png
+	http.HandleFunc("/", logHandler(put))
+	http.HandleFunc("/egg/", logHandler(get))
+	err := http.ListenAndServe(":9090", nil)
+	if err != nil {
+		log.Fatal("ListenAndServe: ", err)
+	}
 }
