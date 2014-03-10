@@ -26,8 +26,8 @@ import (
 
 //TODO: move it into conf file
 const (
-	caviarId    = 1
-	caviarStore = "/var/ikura/store/"
+	ikuraId    = 1
+	ikuraStore = "/var/ikura/store/"
 
 	babyWidth    = 400
 	infantWidth  = 200
@@ -99,13 +99,13 @@ func Message(status string, message interface{}) []byte {
 }
 
 func genPath(file string) string {
-	path := fmt.Sprintf(caviarStore+"%s/%s/%s", file[5:7], file[7:9], file)
+	path := fmt.Sprintf(ikuraStore+"%s/%s/%s", file[5:7], file[7:9], file)
 	fmt.Println(path)
 	return path
 }
 
 func genFile(eid string, color string, width, height int) string {
-	file := fmt.Sprintf("%04x_%s_%s_%d_%d", caviarId, eid, color, width, height)
+	file := fmt.Sprintf("%04x_%s_%s_%d_%d", ikuraId, eid, color, width, height)
 	fmt.Println(file)
 	return file
 }
@@ -208,7 +208,7 @@ func imgToFile(img image.Image, color string) string {
 }
 
 func parsePath(eid string) string {
-	return fmt.Sprintf(caviarStore+"%s/%s/%s", eid[5:7], eid[7:9], eid)
+	return fmt.Sprintf(ikuraStore+"%s/%s/%s", eid[5:7], eid[7:9], eid)
 }
 
 func get(w http.ResponseWriter, r *http.Request) {
@@ -231,7 +231,7 @@ func initStore(path string) {
 }
 
 func main() {
-	initStore(caviarStore)
+	initStore(ikuraStore)
 	http.HandleFunc("/", errorHandler(put))
 	http.HandleFunc("/egg/", errorHandler(get))
 	http.ListenAndServe(":9090", nil)
