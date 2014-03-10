@@ -23,8 +23,7 @@ import (
 	"github.com/nfnt/resize"
 )
 
-//TODO: move it into conf file
-const (
+const ( // TODO: Move to Conf file
 	ikuraId    = 1
 	ikuraStore = "/var/ikura/store/"
 
@@ -55,16 +54,12 @@ type Msg struct {
 	Result interface{} `json:"result"` //{egg: "0001_bbf06d39e4dac6b4cac5ee16226f6b5f7c50f071_ACA0AC_401_638"}
 }
 
-func check(err error) {
-	if err != nil {
-		panic(err)
-		log.Println("PANIC ERROR")
-	}
-}
-
 func (egg *Egg) saveMeta() error {
 	session, err := mgo.Dial(mongodb)
-	check(err)
+	if err != nil {
+		log.Fatal("Was not able to connect to DB ", err)
+	}
+
 	defer session.Close()
 
 	// Optional. Switch the session to a monotonic behavior.
@@ -72,7 +67,9 @@ func (egg *Egg) saveMeta() error {
 
 	c := session.DB("sa").C("egg")
 	err = c.Insert(&egg)
-	check(err)
+	if err != nil {
+		log.Fatal("Was not able to save to DB ", err)
+	}
 	return err
 }
 
@@ -82,7 +79,9 @@ func Message(status string, message interface{}) []byte {
 		Result: message,
 	}
 	b, err := json.Marshal(m)
-	check(err) // real panic
+	if err != nil {
+		log.Println("Was not able to json.Marshal ", err)
+	}
 	return b
 }
 
@@ -99,23 +98,22 @@ func genFile(eid string, color string, width, height int) string {
 }
 
 /*
-{
-	status: "ok"
-	result: {
-	    egg: "0001_bbf06d39e4dac6b4cac5ee16226f6b5f7c50f071_ACA0AC_401_638"
-	}
-}
-*/
+ *{
+ *	status: "ok"
+ * 	result: { egg: "0001_bbf06d39e4dac6b4cac5ee16226f6b5f7c50f071_ACA0AC_401_638" }
+ *}
+ */
 func put(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "PUT" {
-		panic("Not supported Method")
+		w.Write(Message("ERROR", "Not supported Method"))
+		return
 	}
 
 	log.Println(r)
 
 	reader, err := r.MultipartReader()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		w.Write(Message("ERROR", "Client should support multipart/form-data"))
 		return
 	}
 
@@ -138,7 +136,8 @@ func put(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	img, _, err := image.Decode(buf)
 	if err != nil {
-		log.Panic(err) // log.Fatal(err)
+		w.Write(Message("ERROR", "Unable to decode your image"))
+		return
 	}
 	t0 := time.Now()
 
@@ -150,10 +149,13 @@ func put(w http.ResponseWriter, r *http.Request) {
 	red, green, blue, _ := imgSperm.At(0, 0).RGBA()
 	color := fmt.Sprintf("%X%X%X", red>>8, green>>8, blue>>8) // removing 1 byte 9A16->9A
 
-	fileOrig := imgToFile(img, color)
-	fileBaby := imgToFile(imgBaby, color)
-	fileInfant := imgToFile(imgInfant, color)
-	fileNewborn := imgToFile(imgNewborn, color)
+	fileOrig, err := imgToFile(img, color)
+	if err != nil {
+		w.Write(Message("ERROR", "Unable to save your image"))
+	}
+	fileBaby, err := imgToFile(imgBaby, color)
+	fileInfant, err := imgToFile(imgInfant, color)
+	fileNewborn, err := imgToFile(imgNewborn, color)
 
 	result := Result{
 		Egg: fileOrig,
@@ -170,29 +172,36 @@ func put(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.Write(Message("ERROR", "Was not able to save your file"))
 	} else {
-		w.Write(Message("ok", &result))
+		w.Write(Message("OK", &result))
 	}
 
 	t1 := time.Now()
 	log.Printf("The call took %v to run.\n", t1.Sub(t0))
 }
 
-func genHash(img image.Image) string {
+func genHash(img image.Image) (string, error) {
 	h := sha1.New()
 	err := jpeg.Encode(h, img, nil)
-	check(err)
-	return fmt.Sprintf("%x", h.Sum(nil)) // generate hash
+	return fmt.Sprintf("%x", h.Sum(nil)), err // generate hash
 }
 
-func imgToFile(img image.Image, color string) string {
-	file := genFile(genHash(img), color, img.Bounds().Size().X, img.Bounds().Size().Y)
+func imgToFile(img image.Image, color string) (string, error) {
+	hash, err := genHash(img)
+	if err != nil {
+		log.Println("Unable to a file ", err)
+	}
+	file := genFile(hash, color, img.Bounds().Size().X, img.Bounds().Size().Y)
 	path := genPath(file)
 	out, err := os.Create(path)
-	check(err)
+	if err != nil {
+		log.Println("Unable to create a file", err)
+	}
 	defer out.Close()
 	err = jpeg.Encode(out, img, nil) // write image to file
-	check(err)
-	return file
+	if err != nil {
+		log.Println("Unable to save your image to file")
+	}
+	return file, err
 }
 
 func parsePath(eid string) string {
@@ -212,23 +221,13 @@ func initStore(path string) {
 	for i := 0; i < 256; i++ {
 		for x := 0; x < 256; x++ {
 			err := os.MkdirAll(fmt.Sprintf("%s/%02x/%02x", path, i, x), 0755)
-			check(err)
+			if err != nil {
+				log.Fatal("Was not able to create dirs ", err)
+			}
 		}
 	}
 	log.Println("...Done") // total 65536 directories
 }
-
-// func errorHandler(fn http.HandlerFunc) http.HandlerFunc {
-// 	return func(w http.ResponseWriter, r *http.Request) {
-// 		defer func() {
-// 			if err := recover(); err != nil {
-// 				w.WriteHeader(500)
-// 				w.Write(Message("ERROR", err.(string)))
-// 			}
-// 		}()
-// 		fn(w, r)
-// 	}
-// }
 
 func logHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
@@ -239,9 +238,9 @@ func logHandler(h http.Handler) http.Handler {
 
 func main() {
 	initStore(ikuraStore)
-	http.HandleFunc("/", logHandler(put))
-	http.HandleFunc("/egg/", logHandler(get))
-	err := http.ListenAndServe(":9090", nil)
+	http.HandleFunc("/", put)
+	http.HandleFunc("/egg/", get)
+	err := http.ListenAndServe(":9090", logHandler(http.DefaultServeMux))
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
