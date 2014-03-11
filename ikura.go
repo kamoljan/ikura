@@ -47,12 +47,12 @@ type Egg struct {
 }
 
 type Result struct {
-	Egg string `json:"egg"` //0001_bbf06d39e4dac6b4cac5ee16226f6b5f7c50f071_ACA0AC_401_638
+	Newborn string `json:"newborn"` //0001_040db0bc2fc49ab41fd81294c7d195c7d1de358b_ACA0AC_100_160
 }
 
 type Msg struct {
 	Status string      `json:"status"` //"ok"
-	Result interface{} `json:"result"` //{egg: "0001_bbf06d39e4dac6b4cac5ee16226f6b5f7c50f071_ACA0AC_401_638"}
+	Result interface{} `json:"result"` //{newborn: "0001_040db0bc2fc49ab41fd81294c7d195c7d1de358b_ACA0AC_100_160"}
 }
 
 func (egg *Egg) saveMeta() error {
@@ -68,7 +68,7 @@ func (egg *Egg) saveMeta() error {
 
 	c := session.DB("sa").C("egg")
 	// i := bson.NewObjectId() // in case we want to know _id
-	// c.Insert(bson.M{"_id": i, &egg})
+	// err = c.Insert(bson.M{"_id": i, "egg": &egg.Egg, "baby": &egg.Baby, "infant": &egg.Infant, "newborn": &egg.Newborn})
 	err = c.Insert(&egg)
 	if err != nil {
 		log.Fatal("Unable to save to DB ", err)
@@ -103,7 +103,7 @@ func genFile(eid string, color string, width, height int) string {
 /*
  *{
  *	status: "ok"
- * 	result: { egg: "0001_bbf06d39e4dac6b4cac5ee16226f6b5f7c50f071_ACA0AC_401_638" }
+ * 	result: { newborn: "0001_040db0bc2fc49ab41fd81294c7d195c7d1de358b_ACA0AC_100_160" }
  *}
  */
 func put(w http.ResponseWriter, r *http.Request) {
@@ -161,7 +161,7 @@ func put(w http.ResponseWriter, r *http.Request) {
 	fileNewborn, err := imgToFile(imgNewborn, color)
 
 	result := Result{
-		Egg: fileOrig,
+		Newborn: fileNewborn,
 	}
 
 	egg := Egg{
@@ -173,7 +173,7 @@ func put(w http.ResponseWriter, r *http.Request) {
 	err = egg.saveMeta()
 
 	if err != nil {
-		w.Write(Message("ERROR", "Was not able to save your file"))
+		w.Write(Message("ERROR", "Unable to save your image"))
 	} else {
 		w.Write(Message("OK", &result))
 	}
@@ -214,7 +214,7 @@ func parsePath(eid string) string {
 	return fmt.Sprintf(ikuraStore+"%s/%s/%s", eid[5:7], eid[7:9], eid)
 }
 
-func getEggBySize(id string) (Egg, error) {
+func getEggBySize(size, id string) (Egg, error) {
 	session, err := mgo.Dial("mongodb://admin:12345678@localhost:27017/sa")
 	if err != nil {
 		log.Fatal("Unable to connect to DB ", err)
@@ -228,7 +228,7 @@ func getEggBySize(id string) (Egg, error) {
 	result := Egg{}
 	c := session.DB("sa").C("egg")
 	// err = c.FindId(bson.ObjectIdHex(id)).One(&result)
-	err = c.Find(bson.M{"egg": id}).One(&result)
+	err = c.Find(bson.M{size: id}).One(&result)
 	return result, err
 }
 
@@ -241,9 +241,9 @@ func get(w http.ResponseWriter, r *http.Request) {
 	size := r.FormValue("size")
 	eid := html.EscapeString(r.URL.Path[5:]) //cutting "/egg/"
 	if size != "" {
-		d, err := getEggBySize(eid)
+		d, err := getEggBySize(size, eid)
 		if err != nil {
-			w.Write(Message("ERROR", "Unable to find by egg"))
+			w.Write(Message("ERROR", "Unable to find by size"))
 			return
 		}
 		if size == "baby" {
