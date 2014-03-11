@@ -1,4 +1,4 @@
-package ikura
+package api
 
 import (
 	"bytes"

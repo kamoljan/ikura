@@ -1,28 +1,12 @@
 package main
 
 import (
-	"bytes"
-	"crypto/sha1"
-	"encoding/json"
 	"fmt"
-	"html"
-	"image"
-	"image/jpeg"
-	"io"
 	"log"
 	"net/http"
 	"os"
-	"time"
 
-	_ "image/gif"
-	_ "image/jpeg"
-	_ "image/png"
-
-	"github.com/nfnt/resize"
-	"labix.org/v2/mgo"
-	"labix.org/v2/mgo/bson"
-
-	"github.com/kamoljan/ikura/ikura"
+	"github.com/kamoljan/ikura/api"
 )
 
 func initStore(path string) {
@@ -46,8 +30,8 @@ func logHandler(h http.Handler) http.Handler {
 }
 
 func main() {
-	initStore(ikuraStore)
-	http.HandleFunc("/", put)
+	initStore(api.ikuraStore)
+	http.HandleFunc("/", api.put)
 	http.HandleFunc("/egg/", get)
 	err := http.ListenAndServe(":9090", logHandler(http.DefaultServeMux))
 	if err != nil {
