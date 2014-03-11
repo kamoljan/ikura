@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"crypto/sha1"
-	"encoding/json"
 	"fmt"
 	"html"
 	"image"
@@ -24,56 +23,8 @@ import (
 	"github.com/nfnt/resize"
 
 	"github.com/kamoljan/ikura/conf"
+	"github.com/kamoljan/ikura/json"
 )
-
-type Egg struct {
-	Egg     string `json:"egg"`     //0001_bbf06d39e4dac6b4cac5ee16226f6b5f7c50f071_ACA0AC_401_638
-	Baby    string `json:"baby"`    //0001_6881db255b21c864c9d1e28db50dc3b71dab5b78_ACA0AC_400_637
-	Infant  string `json:"infant"`  //0001_ff41e42b0134e219bc09eddda87687822460afcf_ACA0AC_200_319
-	Newborn string `json:"newborn"` //0001_040db0bc2fc49ab41fd81294c7d195c7d1de358b_ACA0AC_100_160
-}
-
-type Result struct {
-	Newborn string `json:"newborn"` //0001_040db0bc2fc49ab41fd81294c7d195c7d1de358b_ACA0AC_100_160
-}
-
-type Msg struct {
-	Status string      `json:"status"` //"ok"
-	Result interface{} `json:"result"` //{newborn: "0001_040db0bc2fc49ab41fd81294c7d195c7d1de358b_ACA0AC_100_160"}
-}
-
-func (egg *Egg) saveMeta() error {
-	session, err := mgo.Dial(conf.Mongodb)
-	if err != nil {
-		log.Fatal("Unable to connect to DB ", err)
-	}
-
-	defer session.Close()
-
-	// Optional. Switch the session to a monotonic behavior.
-	session.SetMode(mgo.Monotonic, true)
-
-	c := session.DB("sa").C("egg")
-	// i := bson.NewObjectId() // in case we want to know _id
-	// err = c.Insert(bson.M{"_id": i, "egg": &egg.Egg, "baby": &egg.Baby, "infant": &egg.Infant, "newborn": &egg.Newborn})
-	err = c.Insert(&egg)
-	if err != nil {
-		log.Fatal("Unable to save to DB ", err)
-	}
-	return err
-}
-
-func Message(status string, message interface{}) []byte {
-	m := Msg{
-		Status: status,
-		Result: message,
-	}
-	b, err := json.Marshal(m)
-	if err != nil {
-		log.Println("Unable to json.Marshal ", err)
-	}
-	return b
-}
 
 func genPath(file string) string {
 	path := fmt.Sprintf(conf.IkuraStore+"%s/%s/%s", file[5:7], file[7:9], file)
@@ -95,7 +46,7 @@ func genFile(eid string, color string, width, height int) string {
  */
 func Put(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "PUT" {
-		w.Write(Message("ERROR", "Not supported Method"))
+		w.Write(json.Message("ERROR", "Not supported Method"))
 		return
 	}
 
@@ -103,7 +54,7 @@ func Put(w http.ResponseWriter, r *http.Request) {
 
 	reader, err := r.MultipartReader()
 	if err != nil {
-		w.Write(Message("ERROR", "Client should support multipart/form-data"))
+		w.Write(json.Message("ERROR", "Client should support multipart/form-data"))
 		return
 	}
 
@@ -126,7 +77,7 @@ func Put(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	img, _, err := image.Decode(buf)
 	if err != nil {
-		w.Write(Message("ERROR", "Unable to decode your image"))
+		w.Write(json.Message("ERROR", "Unable to decode your image"))
 		return
 	}
 	t0 := time.Now()
@@ -141,28 +92,28 @@ func Put(w http.ResponseWriter, r *http.Request) {
 
 	fileOrig, err := imgToFile(img, color)
 	if err != nil {
-		w.Write(Message("ERROR", "Unable to save your image"))
+		w.Write(json.Message("ERROR", "Unable to save your image"))
 	}
 	fileBaby, err := imgToFile(imgBaby, color)
 	fileInfant, err := imgToFile(imgInfant, color)
 	fileNewborn, err := imgToFile(imgNewborn, color)
 
-	result := Result{
+	result := json.Result{
 		Newborn: fileNewborn,
 	}
 
-	egg := Egg{
+	egg := json.Egg{
 		Egg:     fileOrig,
 		Baby:    fileBaby,
 		Infant:  fileInfant,
 		Newborn: fileNewborn,
 	}
-	err = egg.saveMeta()
+	err = egg.SaveMeta()
 
 	if err != nil {
-		w.Write(Message("ERROR", "Unable to save your image"))
+		w.Write(json.Message("ERROR", "Unable to save your image"))
 	} else {
-		w.Write(Message("OK", &result))
+		w.Write(json.Message("OK", &result))
 	}
 
 	t1 := time.Now()
@@ -201,8 +152,8 @@ func parsePath(eid string) string {
 	return fmt.Sprintf(conf.IkuraStore+"%s/%s/%s", eid[5:7], eid[7:9], eid)
 }
 
-func getEggBySize(size, id string) (Egg, error) {
-	session, err := mgo.Dial("mongodb://admin:12345678@localhost:27017/sa")
+func GetEggBySize(size, id string) (json.Egg, error) {
+	session, err := mgo.Dial(conf.Mongodb)
 	if err != nil {
 		log.Fatal("Unable to connect to DB ", err)
 	}
@@ -212,7 +163,7 @@ func getEggBySize(size, id string) (Egg, error) {
 	// Optional. Switch the session to a monotonic behavior.
 	session.SetMode(mgo.Monotonic, true)
 
-	result := Egg{}
+	result := json.Egg{}
 	c := session.DB("sa").C("egg")
 	// err = c.FindId(bson.ObjectIdHex(id)).One(&result)
 	err = c.Find(bson.M{size: id}).One(&result)
@@ -223,14 +174,12 @@ func getEggBySize(size, id string) (Egg, error) {
 func Get(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", conf.Mime)
 	w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d", conf.CacheMaxAge))
-	// log.Println("GET: r.URL.Path = " + r.URL.Path)
-	// log.Println("GET: r.FromValue(size) = " + r.FormValue("size"))
 	size := r.FormValue("size")
 	eid := html.EscapeString(r.URL.Path[5:]) //cutting "/egg/"
 	if size != "" {
-		d, err := getEggBySize(size, eid)
+		d, err := GetEggBySize(size, eid)
 		if err != nil {
-			w.Write(Message("ERROR", "Unable to find by size"))
+			w.Write(json.Message("ERROR", "Unable to find by size"))
 			return
 		}
 		if size == "baby" {
