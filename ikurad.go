@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/kamoljan/ikura/api"
+	"github.com/kamoljan/ikura/conf"
 )
 
 func initStore(path string) {
@@ -30,10 +31,10 @@ func logHandler(h http.Handler) http.Handler {
 }
 
 func main() {
-	initStore(api.ikuraStore)
-	http.HandleFunc("/", api.put)
-	http.HandleFunc("/egg/", get)
-	err := http.ListenAndServe(":9090", logHandler(http.DefaultServeMux))
+	initStore(conf.IkuraStore)
+	http.HandleFunc("/", api.Put)
+	http.HandleFunc("/egg/", api.Get)
+	err := http.ListenAndServe(fmt.Sprintf(":%d", conf.IkuraPort), logHandler(http.DefaultServeMux))
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}

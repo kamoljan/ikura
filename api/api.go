@@ -22,21 +22,8 @@ import (
 	"labix.org/v2/mgo/bson"
 
 	"github.com/nfnt/resize"
-)
 
-const ( // TODO: Move to Conf file
-	ikuraId    = 1
-	ikuraStore = "/var/ikura/store/"
-
-	babyWidth    = 400
-	infantWidth  = 200
-	newbornWidth = 100
-	sperm        = 1
-
-	cacheMaxAge = 30 * 24 * 60 * 60 // 30 days
-	mime        = "image/jpeg"
-
-	mongodb = "mongodb://admin:12345678@localhost:27017/sa"
+	"github.com/kamoljan/ikura/conf"
 )
 
 type Egg struct {
@@ -56,7 +43,7 @@ type Msg struct {
 }
 
 func (egg *Egg) saveMeta() error {
-	session, err := mgo.Dial(mongodb)
+	session, err := mgo.Dial(conf.Mongodb)
 	if err != nil {
 		log.Fatal("Unable to connect to DB ", err)
 	}
@@ -89,13 +76,13 @@ func Message(status string, message interface{}) []byte {
 }
 
 func genPath(file string) string {
-	path := fmt.Sprintf(ikuraStore+"%s/%s/%s", file[5:7], file[7:9], file)
+	path := fmt.Sprintf(conf.IkuraStore+"%s/%s/%s", file[5:7], file[7:9], file)
 	log.Println(path)
 	return path
 }
 
 func genFile(eid string, color string, width, height int) string {
-	file := fmt.Sprintf("%04x_%s_%s_%d_%d", ikuraId, eid, color, width, height)
+	file := fmt.Sprintf("%04x_%s_%s_%d_%d", conf.IkuraId, eid, color, width, height)
 	log.Println(file)
 	return file
 }
@@ -106,7 +93,7 @@ func genFile(eid string, color string, width, height int) string {
  * 	result: { newborn: "0001_040db0bc2fc49ab41fd81294c7d195c7d1de358b_ACA0AC_100_160" }
  *}
  */
-func put(w http.ResponseWriter, r *http.Request) {
+func Put(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "PUT" {
 		w.Write(Message("ERROR", "Not supported Method"))
 		return
@@ -144,10 +131,10 @@ func put(w http.ResponseWriter, r *http.Request) {
 	}
 	t0 := time.Now()
 
-	imgBaby := resize.Resize(babyWidth, 0, img, resize.NearestNeighbor)
-	imgInfant := resize.Resize(infantWidth, 0, imgBaby, resize.NearestNeighbor)
-	imgNewborn := resize.Resize(newbornWidth, 0, imgInfant, resize.NearestNeighbor)
-	imgSperm := resize.Resize(sperm, sperm, imgNewborn, resize.NearestNeighbor)
+	imgBaby := resize.Resize(conf.BabyWidth, 0, img, resize.NearestNeighbor)
+	imgInfant := resize.Resize(conf.InfantWidth, 0, imgBaby, resize.NearestNeighbor)
+	imgNewborn := resize.Resize(conf.NewbornWidth, 0, imgInfant, resize.NearestNeighbor)
+	imgSperm := resize.Resize(conf.Sperm, conf.Sperm, imgNewborn, resize.NearestNeighbor)
 
 	red, green, blue, _ := imgSperm.At(0, 0).RGBA()
 	color := fmt.Sprintf("%X%X%X", red>>8, green>>8, blue>>8) // removing 1 byte 9A16->9A
@@ -211,7 +198,7 @@ func imgToFile(img image.Image, color string) (string, error) {
 }
 
 func parsePath(eid string) string {
-	return fmt.Sprintf(ikuraStore+"%s/%s/%s", eid[5:7], eid[7:9], eid)
+	return fmt.Sprintf(conf.IkuraStore+"%s/%s/%s", eid[5:7], eid[7:9], eid)
 }
 
 func getEggBySize(size, id string) (Egg, error) {
@@ -233,9 +220,9 @@ func getEggBySize(size, id string) (Egg, error) {
 }
 
 //http://localhost:9090/egg/0001_8787bec619ff019fd17fe02599a384d580bf6779_9BA4AA_400_300?type=baby
-func get(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", mime)
-	w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d", cacheMaxAge))
+func Get(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", conf.Mime)
+	w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d", conf.CacheMaxAge))
 	// log.Println("GET: r.URL.Path = " + r.URL.Path)
 	// log.Println("GET: r.FromValue(size) = " + r.FormValue("size"))
 	size := r.FormValue("size")
