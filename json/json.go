@@ -22,7 +22,7 @@ type Result struct {
 
 type Msg struct {
 	Status string      `json:"status"` //"ok"
-	Result interface{} `json:"result"` //{newborn: "0001_040db0bc2fc49ab41fd81294c7d195c7d1de358b_ACA0AC_100_160"}
+	Result interface{} `json:"data"`   //{newborn: "0001_040db0bc2fc49ab41fd81294c7d195c7d1de358b_ACA0AC_100_160"}
 }
 
 func Message(status string, result interface{}) []byte {
@@ -39,7 +39,7 @@ func Message(status string, result interface{}) []byte {
 
 type Msg3 struct {
 	Status  string      `json:"status"`  //"OK" || "ERROR"
-	Result  interface{} `json:"result"`  //{newborn: "0001_040db0bc2fc49ab41fd81294c7d195c7d1de358b_ACA0AC_100_160"}
+	Result  interface{} `json:"data"`    //{newborn: "0001_040db0bc2fc49ab41fd81294c7d195c7d1de358b_ACA0AC_100_160"}
 	Message string      `json:"message"` //"Some Error is happen bla bla"
 }
 
